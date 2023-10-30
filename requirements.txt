@@ -1,0 +1,6 @@
+openpyxl
+XlsxWriter
+matplotlib
+networkx
+streamlit
+plotly
