@@ -136,7 +136,7 @@ def load_data(File , dfmap = None):
 
     sheet_names = pd.ExcelFile(uploaded_file).sheet_names
     SheetMapNameList = [n for n in sheet_names if "map" in n]
-    print(sheet_names)
+    print('sheet_names' , sheet_names)
 
     # used if map is modified in app
     if dfmap is None:
@@ -356,9 +356,9 @@ def Update_Algo(algo):
             gr2.append((g,Clist))
     algo.GroupDict = GroupDict  
     algo.gr = gr2
-    print(algo.GroupDict, algo.gr)
+    # print(algo.GroupDict, algo.gr)
 
-def Plot_indiv(algo,indiv = None, hideEtoC = False, plotedges = True, rs = 0.4):
+def Plot_indiv(algo,indiv = None, hideEtoC = False, plotedges = True, rs = 0.4, NozzlesResults = False):
     # plot figure and detail, slot are made with patch 
 
     # initialisation
@@ -389,7 +389,8 @@ def Plot_indiv(algo,indiv = None, hideEtoC = False, plotedges = True, rs = 0.4):
 
     # plot canvas
     ax.imshow(np.zeros(A0.shape), cmap='gray',vmin=0,vmax=1)  
-    ax.add_patch(mpatch.Rectangle((0,0), Xmax-1, Ymax-1, color='#d8d8d8'))
+    ax.add_patch(mpatch.Rectangle((0.5,0.5), Xmax-2, Ymax-2, color='#d8d8d8'))
+    # ax.add_patch(mpatch.Rectangle((0,0), Xmax-1, Ymax-1, color='#d8d8d8'))
     
     # size of slot ajusted by rs value
     lc = len(algo.CombNodes['C'])
@@ -426,30 +427,40 @@ def Plot_indiv(algo,indiv = None, hideEtoC = False, plotedges = True, rs = 0.4):
         ax.add_patch(mpatch.Rectangle((y-0.5,x-0.5), 1, 1, color='black')) 
 
     # nodes / slots
-    style = dict(size = 8*rs/0.4, color='black')
+    style = dict(size = 7*rs/0.4, color='black')
     nature = algo.SlotsDict['C'].nature.values
     for n, data in nodes: 
         x , y = data['pos']
         slot = n[0]
         nslot = int(n[1:])
         if slot =='C' :             
-            text = str(nslot) + ':' + nature[nslot] 
+            text = str(nslot) + ':' + nature[nslot]  
+            if algo.Group: 
+                text += '\n gr {}'.format(algo.GroupDict[nslot])
+            if (indiv is not None) & NozzlesResults:
+                text += '\n D {}'.format(indiv['DebitList'][n])
+                text += '\n P {}'.format(indiv['PressionList'][n])
         else :
             text = nslot = int(n[1:])
         color = PlotColor[slot]
         ax.add_patch(mpatch.Rectangle((y-rs,x-rs), rs*2, rs*2, color=color))
         ax.add_patch(mpatch.Rectangle((y-rs,x-rs), rs*2, rs*2, color='black', fill = None))
-        ax.text(y, x,str(text), **style,  ha='center', weight='bold') 
+        ax.text(y, x,str(text), **style,  ha='center',va = 'center', weight='bold') 
         if (indiv is not None): 
             if (slot == 'E'):
-                if len(G.adj[n].items()) > 1:
+                # direct PtoC
+                if G.nodes[n]['Masse'] == 0:
+                    ax.plot((y-rs, y+rs),(x-rs, x+rs),'k', linewidth=1, zorder=1, linestyle ='-')
+                # split
+                elif G.nodes[n]['Masse'] == algo.DataCategorie['Special']['Values']['Y']['Masse']:
+                    print('split')
+                    ax.plot((y+rs, y-rs),(x-rs, x+rs),'k', linewidth=1, zorder=1, linestyle ='-')
+                else : 
                     N = len(indiv['EtoC'][n])
                     for i in range(N):
                         size = rs*2/8
                         circle1 = plt.Circle((y-rs+size+i*size*2,x+rs -size), size, color='k',fill=False)
                         ax.add_patch(circle1)
-                else :
-                    ax.plot((y-rs, y+rs),(x-rs, x+rs),'k', linewidth=1, zorder=1, linestyle ='-')
             if (slot == 'P'):
                 N = len(indiv['Ptypes'][n])
                 for i in range(N):
@@ -580,6 +591,7 @@ def indiv_create(algo, row = None, NewCtoE = None, IniEtoP = None):
         Name_txt = Name_txt,
         Epoch = algo.epoch,  
         ICount = {'Pa': 0, 'Pb' : 0, 'Pc' : 0, 'EV' : 0,'Y' : 0,'T':0},
+        deadInfo = '',
     )    
 
     indiv = Gen_Objectif(algo, indiv)
@@ -591,11 +603,12 @@ def indiv_create(algo, row = None, NewCtoE = None, IniEtoP = None):
 
 def Gen_Objectif(algo, indiv):
     # process the differents indiv parameters for graph generation et genetic algorithm fitness 
+    # Masse , Cout , Fitness , alive
+    # take into account Pb , split and direct PtoC coeff EV 
 
-    # Graph 
+    # GRAPH 
     indiv = Indiv_Graph(algo, indiv, mode = algo.Tmode)
     G = indiv['G']
-    EtoC = indiv['EtoC']
 
     # ptype attribution in edges attributes if Bus = random 1 pt 
     # masse cout for ev, P  nodes
@@ -612,7 +625,7 @@ def Gen_Objectif(algo, indiv):
             Masse += algo.DataCategorie['Pompe']['Values'][pt]['Masse']
             Cout  += algo.DataCategorie['Pompe']['Values'][pt]['Cout']
         else :            
-            # multiple pump / slot 
+            # multiple pump / slot = etoilé
             pts = ptList[0]
             for i, e in enumerate(Elist):
                 pt = ptList[i]
@@ -631,20 +644,21 @@ def Gen_Objectif(algo, indiv):
         G.nodes[p]['Masse'] = Masse
         G.nodes[p]['Cout']  = Cout
 
-        # EV, take into account direct connexion PtoC
-        for e, Clist in EtoC.items():
-            if algo.Group & algo.Split:
-                G.nodes[e]['Masse'] = 0
-                G.nodes[e]['Cout'] = 0
-            else : 
-                Ncapteurs = len(Clist)
-                if (len(G.adj[e].items()) == 1) : Ncapteurs=0
-                indiv['ICount']['EV'] += Ncapteurs
-                G.nodes[e]['Masse'] = algo.G0.nodes[e]['Masse'] * Ncapteurs
-                G.nodes[e]['Cout']  = algo.G0.nodes[e]['Cout']  * Ncapteurs
-    
+        # EV, direct connexion PtoC & split
+        for e in Elist: 
+            Clist = indiv['EtoC'][e]
+        # for e, Clist in indiv['EtoC'].items():
+            Ncapteurs = len(Clist)
+            # direct PtoC
+            # (list(G.predecessors(e))[0] == p) -> predecessors = p 
+            # (len(G.adj[e].items()) == 1) -> sucessors = 1 nozzle 
+            if (list(G.predecessors(e))[0] == p) & (len(G.adj[e].items()) == 1): 
+                Ncapteurs=0
+                G.nodes[e]['a'] = 0
+            indiv['ICount']['EV'] += Ncapteurs
+            G.nodes[e]['Masse'] = algo.G0.nodes[e]['Masse'] * Ncapteurs
+            G.nodes[e]['Cout']  = algo.G0.nodes[e]['Cout']  * Ncapteurs
     # Ptypes
-    # permet de filtrer les lignes au depart d'une pompe et stocker pt dans Ptypes
     d = collections.defaultdict(list)    
     for tup in list(nx.subgraph_view(indiv['G'], filter_edge= lambda n1, n2 : n1[0] == 'P').edges.data("pt")):
         p = tup[0]
@@ -652,15 +666,12 @@ def Gen_Objectif(algo, indiv):
     indiv['Ptypes'] = dict(d)
 
     # print(list(nx.subgraph_view(indiv['G'], filter_edge= lambda n1, n2 : n1[0] == 'P').edges.data("pt")))
-    # list(nx.subgraph_view(indiv['G'], filter_edge= lambda n1, n2 : n1[0] == 'P').edges.data("pt"))
-    # nx.get_node_attributes(G, 'Masse')
-    # nx.get_node_attributes(G, 'Cout')
 
     # DEBIT calculation
     indiv['IndivLine2'] = IndivLine_(algo,indiv)
     indiv = debit_calculation(algo,indiv)
 
-    # OBJECTIF ALIVE
+    # GEN OBJECTIF , FITNESS => ALIVE
     indiv['dist']  = round(G.size('dist'),1)
 
     indiv['Masse'] = G.size('Masse') + sum(nx.get_node_attributes(G, 'Masse').values())
@@ -680,22 +691,40 @@ def Gen_Objectif(algo, indiv):
     for i in range(3): 
         fitness+= indiv[ListFitness[i]] * algo.fitnessCompo[i]  
     indiv['fitness'] = round(fitness,5)
-    indiv['Alive'] = False if  (indiv['PressionList'] < algo.SlotsDict['C'].limit.values).any() else True 
+    cond = not (indiv['PressionList'] < algo.SlotsDict['C'].limit.values).any() 
+    indiv['Alive'] = cond 
+    if not cond : indiv['deadInfo'] += ' Pression limit '
 
     # Pompe limit 
     DictPNmax = algo.SlotsDict['P'].set_index('Slot').Nmax.to_dict()
     cond = True
     for p, v in indiv['Ptypes'].items():
         if len(v) > DictPNmax[p] : cond = cond & False 
+    indiv['Alive'] = indiv['Alive'] & cond 
+    if not cond : indiv['deadInfo'] += ' P slot limit '
 
-    # check if indiv alive
+    # EV limit
     DictEVNmax = algo.SlotsDict['E'].set_index('Slot').Nmax.to_dict()
     cond = True
     for e,v in indiv['EtoC'].items():
         if len(v) > DictEVNmax[e] : cond = cond & False 
     indiv['Alive'] = indiv['Alive'] & cond 
+    if not cond : indiv['deadInfo'] += ' E slot limit '  
 
-    # format pression & debit
+    # "E0-C4,E1-C0,E2-C1,E3-C2,E3-C3,P0-E0,P0-E1,P0-E2,P0-E3"
+    # dead if T algo generate Eslot as T slot
+    if algo.Tmode == 'T':
+        cond = True
+        for e, Clist in indiv['EtoC'].items():
+            Ecount = 0
+            for n in G.successors(e):
+                if n[0] == 'E': Ecount+=1
+            cond &= Ecount <2
+        indiv['Alive'] = indiv['Alive'] & cond 
+        if not cond : indiv['deadInfo'] += ' Multiple Eslot connect '
+
+    # print(indiv['deadInfo'] )
+    # print format pression & debit
     indiv['PressionList']  = dict(zip(algo.CombNodes['C'], indiv['PressionList']))
     indiv['DebitList']  = dict(zip(algo.CombNodes['C'], indiv['DebitList']))
 
@@ -848,16 +877,18 @@ def Indiv_Graph(algo, indiv,mode = None):
     return indiv
 
 def IndivLine_(algo, indiv):
-    # schema for indiv debit calculation, manage group
-
+    # schema for indiv debit calculation, manage group = line group format
+    #form = {P : [(Gr, pt, {E: [C ...], ...}, ...), ...}
+    
     gr = algo.gr
     G = indiv['G']
 
     indivline = {}
     for p in indiv['Pnodes']:
         Pline = []
+        # loop on group numbers
         for g , Clist in gr:
-
+            # graph traversal 
             for n2 in G.successors(p):
                 pt = G[p][n2]['pt']
                 ns = [n2]
@@ -888,11 +919,8 @@ def debit_calculation(algo,indiv):
 
     G = indiv['G']
     Q0 = np.arange(0.1,80,0.1)
-    res = {}
-    PressionList, DebitList = {}, {}
     attrs = {}
-
-    # parcours IndivLine
+    # traversal IndivLine
     for p, line in indiv['IndivLine2'].items():    
         for g ,pt , Edict in line:
 
@@ -907,18 +935,22 @@ def debit_calculation(algo,indiv):
                 CoeffEtoC = np.array([G[e][c]['coeff'] for c in Clist])
                 CoeffC    = np.array([G.nodes[c]['a'] for c in Clist])
                 CcList.append(CoeffC)
+                CoeffE = G.nodes[e]['a']
 
-                # direct connexion P to C 
-                if (len(G.adj[e].items()) > 1) & (algo.Split == False): 
-                    CoeffE = G.nodes[e]['a']
-                else :
-                    CoeffE = 0
-
-                if algo.Split:
-                    indiv['ICount']['Y'] += 1 
-                    G.nodes[e]['Masse'] += 10
-                    G.nodes[e]['Cout']  += 0.2
-
+                # SPLIT : masse cout CoeffE, count
+                Split = algo.Split
+                if Split: 
+                    # check if split possible
+                    Split &= len(Edict) == 1 # all C in same group
+                    Split &= list(G.predecessors(e))[0] == p # direct connexion to P
+                    Split &= (len(Clist) > 1) & (len(G.adj[e].items()) == len(Clist)) # ONLY  multiple C else direct connexion
+                    # Split &= g != 0 # only group
+                    if Split:
+                        indiv['ICount']['Y'] += 1                     
+                        CoeffE = algo.DataCategorie['Special']['Values']['Y']['a']
+                        G.nodes[e]['a'] = CoeffE
+                        G.nodes[e]['Masse'] = algo.DataCategorie['Special']['Values']['Y']['Masse']
+                        G.nodes[e]['Cout']  = algo.DataCategorie['Special']['Values']['Y']['Cout']
                 
                 F = F - coef_PtoE*(Q0-Qx)**2
                 F[F<0] = 0              
@@ -928,12 +960,13 @@ def debit_calculation(algo,indiv):
                 Qlist.append(np.sqrt(F / A[:,np.newaxis]))
                 Qi = np.vstack(Qlist)
                 Qx = Qi.sum(0)
-                Start = e  # attention si T il est perdu 
+                Start = e
                 CListTotal += Clist
             idx = np.searchsorted(Q0 - Qx, -0.1)
             Qi  = np.vstack(Qlist)[:,idx].round(2)
             Pi  = (np.concatenate(CcList)* (Qi**2)).round(2)
 
+            # format results
             for i in range(len(CListTotal)):
                 c = CListTotal[i]
                 attrs[c] = dict(

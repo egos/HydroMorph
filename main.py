@@ -11,7 +11,7 @@ from utils import *
 
 # streamlit app section 
 
-st.set_page_config(page_title = "VALEO_AG_IHM", layout="wide")
+st.set_page_config(page_title = "HydroMorph", layout="wide", page_icon=":wrench:")
 pop = 10      
 
 # increase button width
@@ -22,7 +22,8 @@ ColDfVal   = ['Ecount','Pcount', 'dist','ID','Masse', 'Cout','Alive','Group']
 
 today = time.strftime("%Y-%m-%d-%H:%M:%S")
 print(today)
-
+st.sidebar.image("Valeo_Logo.png", use_column_width=True)
+st.sidebar.header('HydroMorph')
 # initialize data structure algo on start
 if 'algo' not in session_state: 
     print(' ')
@@ -190,19 +191,26 @@ if c2.button('RESET'):
             st.success('no conflicts for parameters : ' + str(DictAlgo))
         print('Params : RESET')              
         if (NameIndiv != ['']):
-            L = []
-            for Name in NameIndiv: 
-                if Name != '' :
-                    indiv = Indiv_reverse(Name,algo)             
-                    L.append(indiv)
-            df = pd.DataFrame(L)
-            df = df.reset_index(drop = True)
+            try : 
+                L = []
+                for Name in NameIndiv: 
+                    if Name != '' :
+                        indiv = Indiv_reverse(Name,algo)             
+                        L.append(indiv)
+                df = pd.DataFrame(L)
+                df = df.reset_index(drop = True)
+                if KeepResults:
+                    algo.df = pd.concat([df,algo.df]) 
+                else :
+                    algo.df = df.drop_duplicates(subset='Name_txt')
+            except :
+                st.error('error : the indiv reverse name not corresponding')
         else : 
             df = indiv_init(algo, algo.pop)
-        if KeepResults:
-            algo.df = pd.concat([df,algo.df]) 
-        else :
-            algo.df = df.drop_duplicates(subset='Name_txt')
+            if KeepResults:
+                algo.df = pd.concat([df,algo.df]) 
+            else :
+                algo.df = df.drop_duplicates(subset='Name_txt')
         algo.SaveRun = []
         session_state['algo'] = algo
 else : 
@@ -291,7 +299,7 @@ if (len(df1)>0) & (algo.ErrorParams !=2) :
     st.write(str(DictParams))
 
     ColexportDefault = ['ID','dist','Debit','Masse','Cout','fitness','Epoch',
-                        'Alive','parent','ICount','Name_txt','PressionList','DebitList']
+                        'Alive','parent','ICount','Name_txt','PressionList','DebitList','deadInfo']
     Colexport = st.multiselect('indiv keys', df1.columns.tolist(),ColexportDefault)
 
     dfx = df1[Colexport].copy()
@@ -314,13 +322,14 @@ if (len(df1)>0) & (algo.ErrorParams !=2) :
     with st.expander("Figures & detailled results", True):
         
         if (Range> 0) & algo.Plot:
-            stcol  = st.columns(4)
-            hideEtoC = stcol[0].checkbox('hide EtoC',False)
-            rs = stcol[2].slider('slot size', 0.2, 1.2, step = 0.1, value = 0.4)
-            Empty = stcol[3].empty()
+            stcol  = st.columns(5)
+            hideEtoC = stcol[1].toggle('hide EtoC',False)
+            NozzlesResults = stcol[2].toggle('plot Nozzle results')
+            rs = stcol[3].slider('slot size', 0.2, 1.2, step = 0.1, value = 0.4)            
+            Empty = stcol[4].empty()
             ListResultsExport = []
 
-            if stcol[1].toggle('Detailled results'):                
+            if stcol[0].toggle('Detailled results'):                
                 idxcol = 0 
                 for i in range(Range):
                     
@@ -329,7 +338,7 @@ if (len(df1)>0) & (algo.ErrorParams !=2) :
 
                     c1, c2, c3 = st.columns([1,2,2])
                     indiv = row.to_dict()
-                    fig = Plot_indiv(algo,indiv, hideEtoC, rs = rs)
+                    fig = Plot_indiv(algo,indiv, hideEtoC, rs = rs , NozzlesResults=  NozzlesResults)
                     row.name = row.ID
 
                     c1.pyplot(fig)
@@ -350,7 +359,7 @@ if (len(df1)>0) & (algo.ErrorParams !=2) :
                 for i in range(Range): 
                     row = dfSelect.iloc[i]
                     indiv = row.to_dict()                    
-                    fig = Plot_indiv(algo,indiv, hideEtoC, rs = rs)
+                    fig = Plot_indiv(algo,indiv, hideEtoC, rs = rs, NozzlesResults=  NozzlesResults)
                     row.name = row.ID
                     colSt[idxcol].dataframe(row[Colexport].drop(['ID']).astype(str), use_container_width=True)                  
                     colSt[idxcol].pyplot(fig)

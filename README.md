@@ -1,10 +1,11 @@
-# Project Title
+# HydroMorph (VALEO)
 
 ## Table of Contents
 
 - [About](#about)
 - [Getting Started](#getting_started)
 - [Usage](#usage)
+- [Improvements](#improvements)
 
 ## About <a name = "about"></a>
 
@@ -44,3 +45,13 @@ The program has 2 distinct parts:
  for a better understanding the following figure details the interactions between the functions, the color code corresponds to a specific section of the calculation, the knowledge required to modify these sections (libraries) are also listed. 
 
 ![ALT TEXT](Algo_schema.jpg)
+
+## Improvements <a name = "Improvements"></a>
+
+the code is currently in V3, here a list of improvement for a V4: 
+ - used the "T" in group mode.
+ - improved optimization of bus/T graphs. (ex case of EV slot with more than one connexion)
+ - BUS & star network possible on a single slot.
+ - direct connection pump to nozzle without going through EV slot (same for split).
+ - passing slot for pathfinding.
+ - direct network creation, improved custom map widget.
