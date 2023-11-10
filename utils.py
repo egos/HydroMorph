@@ -946,7 +946,8 @@ def debit_calculation(algo,indiv):
                     Split &= (len(Clist) > 1) & (len(G.adj[e].items()) == len(Clist)) # ONLY  multiple C else direct connexion
                     # Split &= g != 0 # only group
                     if Split:
-                        indiv['ICount']['Y'] += 1                     
+                        indiv['ICount']['Y'] += 1    
+                        indiv['ICount']['EV'] -= len(Clist)                 
                         CoeffE = algo.DataCategorie['Special']['Values']['Y']['a']
                         G.nodes[e]['a'] = CoeffE
                         G.nodes[e]['Masse'] = algo.DataCategorie['Special']['Values']['Y']['Masse']
