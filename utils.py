@@ -453,7 +453,7 @@ def Plot_indiv(algo,indiv = None, hideEtoC = False, plotedges = True, rs = 0.4, 
                     ax.plot((y-rs, y+rs),(x-rs, x+rs),'k', linewidth=1, zorder=1, linestyle ='-')
                 # split
                 elif G.nodes[n]['Masse'] == algo.DataCategorie['Special']['Values']['Y']['Masse']:
-                    print('split')
+                    # print('split')
                     ax.plot((y+rs, y-rs),(x-rs, x+rs),'k', linewidth=1, zorder=1, linestyle ='-')
                 else : 
                     N = len(indiv['EtoC'][n])
@@ -686,14 +686,27 @@ def Gen_Objectif(algo, indiv):
     indiv['DebitList'] = np.array(list(nx.get_node_attributes(G, "Qi").values())).round(1)
     indiv['Debit'] = round(indiv['DebitList'].sum(),1)
   
+    # ALIVE
+
+    dfr = pd.DataFrame.from_dict(dict(G.nodes(data=True)), orient='index')
+    dfr = dfr[dfr.Categorie =='Nozzle'][['Pi','Qi']].round(1)
+    indiv['Debit'] = round(dfr.Qi.sum(),1)
+    indiv['PressionList'] = dfr.Pi.values
+    indiv['DebitList'] = dfr.Qi.values
+    # indiv['Debit'] = round(indiv['DebitList'].sum(),1)
+
     ListFitness = ['dist','Masse','Cout']
     fitness = 0
+    # check fitness
     for i in range(3): 
         fitness+= indiv[ListFitness[i]] * algo.fitnessCompo[i]  
     indiv['fitness'] = round(fitness,5)
     cond = not (indiv['PressionList'] < algo.SlotsDict['C'].limit.values).any() 
     indiv['Alive'] = cond 
     if not cond : indiv['deadInfo'] += ' Pression limit '
+    # format results
+    indiv['PressionList']  = dfr.Pi.to_dict()
+    indiv['DebitList']  = dfr.Qi.to_dict()
 
     # Pompe limit 
     DictPNmax = algo.SlotsDict['P'].set_index('Slot').Nmax.to_dict()
@@ -723,10 +736,9 @@ def Gen_Objectif(algo, indiv):
         indiv['Alive'] = indiv['Alive'] & cond 
         if not cond : indiv['deadInfo'] += ' Multiple Eslot connect '
 
-    # print(indiv['deadInfo'] )
-    # print format pression & debit
-    indiv['PressionList']  = dict(zip(algo.CombNodes['C'], indiv['PressionList']))
-    indiv['DebitList']  = dict(zip(algo.CombNodes['C'], indiv['DebitList']))
+
+
+
 
     return indiv
 
@@ -974,6 +986,8 @@ def debit_calculation(algo,indiv):
                     Pi = Pi[i],
                     Qi = Qi[i]                
                 )
+            print(CListTotal, Pi, Qi)
+            # print(Qi)
     nx.set_node_attributes(G,attrs)
                 
     indiv['G'] = G
