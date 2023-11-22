@@ -736,10 +736,6 @@ def Gen_Objectif(algo, indiv):
         indiv['Alive'] = indiv['Alive'] & cond 
         if not cond : indiv['deadInfo'] += ' Multiple Eslot connect '
 
-
-
-
-
     return indiv
 
 def Indiv_reverse(Name,algo):
@@ -986,8 +982,6 @@ def debit_calculation(algo,indiv):
                     Pi = Pi[i],
                     Qi = Qi[i]                
                 )
-            print(CListTotal, Pi, Qi)
-            # print(Qi)
     nx.set_node_attributes(G,attrs)
                 
     indiv['G'] = G
